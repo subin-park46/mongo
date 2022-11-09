@@ -1,0 +1,103 @@
+db.multi.insert({"name": "hong-gd", "class": "multi", "midterm": {"kor": 100, "eng": 60, "math": 80}});
+
+db.test.insertOne({"name": "test", "age": 100, "class": "multi"}); # 최신 버전
+
+db.multi.insertMany([{"name": "you-js", "kor": 100, "eng": 90, "math": 95},{"name": "shin-dy", "kor": 90, "eng": 85, "math": 100}]) # 최신 버전
+
+var lee = {"name": "lee-ss", "midterm": {"kor": 60, "eng": 89, "math": 100, "sci": 100}, "final": {"kor": 67, "eng" 90, "math": 100}}
+db.multi.insertOne(lee);
+
+
+db.multi.find({}, {_id: 0, name:1, kor: 1, eng: 1}); # 0은 숨기고, 1은 보여줌.
+
+db.multi.find({"midterm": {$exists: true}});
+
+db.multi.find({$and: [{"kor": {$lt: 100}}, {"math": {$gte: 70}}]}, {"_id": 0, "name": 1, "kor": 1, "eng": 1});
+
+db.multi.find({"name": /k/}) # sql %k%
+
+db.multi.find({"name": {$regex: "k"}}); # sql %k%
+
+db.multi.find().sort({"name": 1}) # 오름차순
+
+db.multi.find().sort({"kor": -1}); # 내림차순
+
+db.multi.find().skip(1); # 처음꺼 하나 숨김
+
+
+db.multi.updateOne({"name": "hong-gd"}, {$set: {"name": "홍길동"}}); # $set은 변경할 때 사용함.
+
+db.multi.updateOne({"name": "lee-ss"}, {$set: {"name": "이순신"}});
+
+db.multi.updateMany({"midterm": {$exists: true}}, {$set: {"class": "graduated"}});
+
+
+// replaceOne : document가 변경된다. -> 객체 자체의 필드 값만 싹 바뀜. _id는 동일
+
+db.multi.replaceOne({"final": {$exists: true}}, {"name": "lee-ss", "kor": 67, "eng": 90, "math": 100});
+
+
+function updateKor() { var tmp = db.multi.updateMany({kor: {$lte: 70}}, {$set: {kor: 0}}); return tmp }
+updateKor() 호출 후, 
+db.multi.find() 하면 조건에 맞춰 변경됨.
+
+
+db.multi.deleteOne({name: "홍길동"}); # 필드 지정 가능.
+
+db.multi.deleteMany({}); # 전부 삭제
+
+
+< 배열 >
+
+db.myfriends.insertOne({"name": "아이언맨", buddy: ["토르", "헐크", "호크아이"]});
+
+db.myfriends.insertOne({"name": "슈퍼맨", buddy: ["배트맨", "원더우먼", "아쿠아맨", "조커"]});
+
+db.myfriends.updateOne({"name": "아이언맨"}, {$push: {"buddy": {$each: ["캡틴아메리카", "블랙위도우"]}}});
+
+db.myfriends.updateOne({"name": "슈퍼맨"}, {$pop: {"buddy": 1}}); # 마지막 하나가 pop 됨.
+
+db.score.aggregate()의 결과 값과 find 사용시 결과 값이 동일함.
+
+
+aggregate 사용하면, 여러 함수 사용 가능.
+$project : Project에서 지정한 필드 값을 다음 파이프라인 단계로 전달
+
+db.score.aggregate({$project: {"_id": 0, "name": 1, "kor": 1, "eng": 1, "math":1}});
+
+$match : 조건에 만족하는 Document만 Filtering
+db.score.aggregate({$match: {"kor": {$gte: 80}}});
+
+$group : Document에 대한 Grouping 연산을 수행 / Group에 대한 id를 지정해야하고, 특정 필드에 대한 집계 연산이 가능
+db.score.aggregate({$group: {"_id": "$test", "average": {$avg: "$kor"}}}); # kor의 평균을 구해서 average로 변경
+
+// test가 final인 document들의 이름과 수학, 영어만 출력
+db.score.aggregate([{$match: {"test": "final"}}, {$project: {"_id": 0, "name":1, "math": 1, "eng":1}}]);
+
+// test가 midterm인 document들의 영어 평균을 구하자.
+db.score.aggregate({$match: {"test": "midterm"}}, {$project: {"eng": 1}}, {$group: {"_id": "test", "average": {$avg: "$eng"}}});
+
+// if 부문을 총 합으로 나타내고 싶음.
+function myMap() {
+emit(this.score, {name: this.name, kor: this.kor, eng: this.eng, test: this.test});
+}
+
+function myReduce(key, values) {
+var result = {name: new Array(), kor: new Array(), eng: new Array(), total: new Array()};
+values.forEach(function(val){
+
+if (val.test == "final") {
+          result.total += val.kor + val.eng + " ";
+          result.name += val.name + " ";
+          result.kor += val.kor + " ";
+          result.eng += val.eng + " ";
+}
+});
+
+return result;
+
+}
+
+
+db.score.mapReduce(myMap, myReduce, {out: {replace: "myRes"}});
+db.myRes.find();
